@@ -16,9 +16,13 @@ import java.util.UUID;
 public class RpcProxyClient implements InvocationHandler {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RpcProxyClient.class);
+    private static final RpcProxyClient INSTANCE = new RpcProxyClient();
 
+    private RpcProxyClient() {}
+
+    @SuppressWarnings("unchecked")
     public static <T> T getInstance(Class<?> clazz) {
-        return (T) Proxy.newProxyInstance(clazz.getClassLoader(), new Class<?>[]{clazz}, new RpcProxyClient());
+        return (T) Proxy.newProxyInstance(clazz.getClassLoader(), new Class<?>[]{clazz}, INSTANCE);
     }
 
     @Override

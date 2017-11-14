@@ -13,6 +13,7 @@ public class RpcServerStarter {
 
     public static void main(String[] args) {
         try {
+            RpcServer.init();
             RpcServer.start();
         } catch (Exception e) {
             LOGGER.error("rpc start failed : ", e);
