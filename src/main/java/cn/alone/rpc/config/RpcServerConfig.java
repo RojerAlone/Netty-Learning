@@ -3,7 +3,7 @@ package cn.alone.rpc.config;
 /**
  * Created by RojerAlone on 2017-11-14
  */
-public class RpcConfig {
+public class RpcServerConfig {
 
     /**
      * rpc 服务监听的端口

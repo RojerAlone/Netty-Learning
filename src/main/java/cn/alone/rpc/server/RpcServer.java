@@ -1,6 +1,6 @@
 package cn.alone.rpc.server;
 
-import cn.alone.rpc.config.RpcConfig;
+import cn.alone.rpc.config.RpcServerConfig;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelInitializer;
@@ -42,8 +42,8 @@ public class RpcServer {
 
                         }
                     });
-            ChannelFuture future = bootstrap.bind(RpcConfig.SERVER_PORT).sync();
-            System.out.println("rpc server start on port " + RpcConfig.SERVER_PORT);
+            ChannelFuture future = bootstrap.bind(RpcServerConfig.SERVER_PORT).sync();
+            System.out.println("rpc server start on port " + RpcServerConfig.SERVER_PORT);
             future.channel().closeFuture().sync();
         } finally {
             stop();
