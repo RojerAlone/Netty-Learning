@@ -45,6 +45,9 @@ public class DiscardServer {
         }
     }
 
+    /**
+     * 启动后在命令行执行 telnet localhost PORT 即可，输入信息可以在 run 窗口看到输入的信息
+     */
     public static void main(String[] args) throws Exception {
         new DiscardServer(PORT).run();
     }
