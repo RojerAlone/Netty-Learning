@@ -4,6 +4,9 @@
 public interface ChannelPipeline
         extends ChannelInboundInvoker, ChannelOutboundInvoker, Iterable<Entry<String, ChannelHandler>> {
 
+    /*
+     * 以下方法用来操作 ChannelHandler
+     */
     ChannelPipeline addFirst(String name, ChannelHandler handler);
     ChannelPipeline addFirst(EventExecutorGroup group, String name, ChannelHandler handler);
     ChannelPipeline addLast(String name, ChannelHandler handler);
@@ -24,6 +27,10 @@ public interface ChannelPipeline
     ChannelHandler replace(String oldName, String newName, ChannelHandler newHandler);
     <T extends ChannelHandler> T replace(Class<T> oldHandlerType, String newName,
                                          ChannelHandler newHandler);
+    
+    /*
+     * 以下方法用来获取 ChannelPipeline 中的信息
+     */
     ChannelHandler first();
     ChannelHandlerContext firstContext();
     ChannelHandler last();
@@ -37,6 +44,9 @@ public interface ChannelPipeline
     List<String> names();
     Map<String, ChannelHandler> toMap();
 
+    /*
+     * 以下方法继承自 ChannelInboundInvoker，用于调用下一个 ChannelInboundHandler 的对应方法
+     */
     @Override
     ChannelPipeline fireChannelRegistered();
 
