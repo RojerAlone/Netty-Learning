@@ -120,11 +120,13 @@ public interface ChannelInboundHandler extends ChannelHandler {
 
     /**
      * ChannelHandlerContext 中的 Channel 激活时调用
+     * 相当于 Netty4 之前的 channelOpen/channelBound/channelConnected 事件的集合
      */
     void channelActive(ChannelHandlerContext ctx) throws Exception;
 
     /**
      * ChannelHandlerContext 中注册的 Channel 处于非活跃状态并且生命周期即将结束的时候调用
+     * 相当于 Netty4 之前的 channelClosed/channelUnbound/channelDisconnected 事件的集合
      */
     void channelInactive(ChannelHandlerContext ctx) throws Exception;
 
