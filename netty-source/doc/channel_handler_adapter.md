@@ -44,3 +44,11 @@ public abstract class ChannelHandlerAdapter implements ChannelHandler {
 ```
 
 `ChannelHandlerAdapter` 实现很简单，对 `@Sharable` 注解的验证，以及传递异常给 pipeline 中的下一个 handler，Netty 本身不关心 handler 被添加或者删除，因此在实现里默认什么也不做，由开发者的业务决定代码逻辑，开发者重写这两个方法即可。
+
+## ChannelInboundHandlerAdapter
+
+`ChannelInboundHandlerAdapter` 继承了 `ChannelHandlerAdapter` 类，并且实现了 `ChannelInboundHandler` 方法，所有的实现方法都是默认将事件往下传递，用户根据自己的业务逻辑重写相应方法即可，Netty 只是提供一个入站 Handler 的适配器。
+
+## ChannelOutboundHandlerAdapter
+
+`ChannelInboundHandlerAdapter` 继承了 `ChannelHandlerAdapter` 类，并且实现了 `ChannelInboundHandler` 方法，所有的实现方法都是默认将事件往下传递，用户根据自己的业务逻辑重写相应方法即可，Netty 只是提供一个入站 Handler 的适配器。
