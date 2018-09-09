@@ -51,4 +51,4 @@ public abstract class ChannelHandlerAdapter implements ChannelHandler {
 
 ## ChannelOutboundHandlerAdapter
 
-`ChannelInboundHandlerAdapter` 继承了 `ChannelHandlerAdapter` 类，并且实现了 `ChannelInboundHandler` 方法，所有的实现方法都是默认将事件往下传递，用户根据自己的业务逻辑重写相应方法即可，Netty 只是提供一个入站 Handler 的适配器。
+`ChannelOutboundHandlerAdapter` 继承了 `ChannelHandlerAdapter` 类，并且实现了 `ChannelOutboundHandler` 方法，所有的实现方法都是通过调用 `ChannelHandlerContext` 向下传递，我们熟知的 `MessageToByteEncoder` 就继承了这个类。
