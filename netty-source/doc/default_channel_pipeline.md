@@ -106,7 +106,7 @@ private void addLast0(AbstractChannelHandlerContext newCtx) {
     tail.prev = newCtx;
 }
 ```
-
+`addFirst` 方法和 `addLast` 方法逻辑相同，只不过是加到了 head 结点后面，这里不再贴出代码。
 ## filterName
 
 filterName 用于对 handler 的名字做合法性检查。
@@ -146,3 +146,17 @@ private String generateName(ChannelHandler handler) {
 ```
 
 在这里用到了 cache，这个缓存是对 handler 和它所对应的名字的 ThreadLocal 缓存，一个 channel 对应一个 EventLoop，使用了 ThreadLocal 缓存。
+
+## 事件传递
+
+pipeline 中的事件传递方法都是 `fire***` 的格式命名的方法，比如 `fireChannelRegistered`、`fireChannelActive` 等方法，他们的处理逻辑都相同，调用 `AbstractChannelHandlerContext` 中对应的方法，以 `fireChannelRead` 方法为例：
+
+```java
+@Override
+public final ChannelPipeline fireChannelRead(Object msg) {
+    AbstractChannelHandlerContext.invokeChannelRead(head, msg); // 调用 AbstractChannelHandlerContext 中的方法来传递事件，在这个方法中会将事件沿着链表传递下去
+    return this;
+}
+```
+
+具体实现在 `AbstractChannelHandlerContext` 中，这里不展开讲，在分析其代码时展开说。
