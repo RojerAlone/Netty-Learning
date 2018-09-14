@@ -44,6 +44,48 @@ public interface ChannelHandlerContext extends AttributeMap, ChannelInboundInvok
 
 ### 类属性
 
+```java
+abstract class AbstractChannelHandlerContext extends DefaultAttributeMap implements ChannelHandlerContext, ResourceLeakHint {
+
+    // 前驱结点和后继结点
+    volatile AbstractChannelHandlerContext next;
+    volatile AbstractChannelHandlerContext prev;
+
+    // 用来设置 handler 状态的更新器
+    private static final AtomicIntegerFieldUpdater<AbstractChannelHandlerContext> HANDLER_STATE_UPDATER;
+    
+    // 当 ChannelHandler.handlerAdded 准备被调用的状态（在 Netty 中是异步的，有中间状态）
+    private static final int ADD_PENDING = 1;
+    // 当 ChannelHandler.handlerAdded 被调用以后的状态
+    private static final int ADD_COMPLETE = 2;
+    // 当 ChannelHandler.handlerRemoved 被调用以后的状态
+    private static final int REMOVE_COMPLETE = 3;
+    // 最初始的状态，创建一个 context 对象时候的初始状态
+    private static final int INIT = 0;
+    
+    private final boolean inbound; // 是否是入站 handler
+    private final boolean outbound; // 是否是出站 handler
+    private final DefaultChannelPipeline pipeline; // 绑定的 pipeline
+    private final String name; // 全局唯一的名字
+    private final boolean ordered; // 事件是否是顺序执行的
+
+    // 执行器，如果没有设置为 null
+    final EventExecutor executor;
+    // successFuture 的 isSuccess 总是返回 true，保证了不会阻塞
+    private ChannelFuture succeededFuture;
+
+    // 异步事件任务
+    private Runnable invokeChannelReadCompleteTask;
+    private Runnable invokeReadTask;
+    private Runnable invokeChannelWritableStateChangedTask;
+    private Runnable invokeFlushTask;
+
+    private volatile int handlerState = INIT; // handler 初始状态为 INIT
+}
+```
+
+类属性主要是前驱和后继结点，以及 handler 状态的常量、当前 handler 绑定的 pipeline、executor 和异步事件任务（Netty 中的一切都是异步的，包括事件传递）。
+
 ### 初始化
 
 ### 核心功能：事件传递
