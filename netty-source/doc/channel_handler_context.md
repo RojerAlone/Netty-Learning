@@ -88,7 +88,87 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap impleme
 
 ### 初始化
 
+初始化有两部分，静态代码块和构造方法。
+
+```java
+static {
+    AtomicIntegerFieldUpdater<AbstractChannelHandlerContext> handlerStateUpdater = PlatformDependent
+            .newAtomicIntegerFieldUpdater(AbstractChannelHandlerContext.class, "handlerState");
+    if (handlerStateUpdater == null) {
+        handlerStateUpdater = AtomicIntegerFieldUpdater
+                .newUpdater(AbstractChannelHandlerContext.class, "handlerState");
+    }
+    HANDLER_STATE_UPDATER = handlerStateUpdater;
+}
+```
+
+静态代码块对 `handlerStateUpdater` 进行了赋值，使用了 JDK 自带的并发包内的 `AtomicIntegerFieldUpdater` 类，用于更新 handler 状态。
+
+```java
+AbstractChannelHandlerContext(DefaultChannelPipeline pipeline, EventExecutor executor, String name,
+                              boolean inbound, boolean outbound) {
+    this.name = ObjectUtil.checkNotNull(name, "name");
+    this.pipeline = pipeline;
+    this.executor = executor;
+    this.inbound = inbound;
+    this.outbound = outbound;
+    // 如果 executor 是 null 或者是 OrderedEventExecutor 类型，事件驱动是有序的
+    ordered = executor == null || executor instanceof OrderedEventExecutor;
+}
+```
+
+构造方法只对类属性做了赋值。
+
 ### 核心功能：事件传递
+
+事件传递是在 pipeline 中被触发的，但是实际的传递过程是在 context 进行的，通过双向链表一个一个沿事件流动方向传递。
+
+`ChannelHandlerContext` 接口继承自 `ChannelInboundInvoker` 接口的事件传递方法都是以 `fire***`格式命名的方法，以 `fireChannelRead` 方法为例：
+
+```java
+@Override
+public ChannelHandlerContext fireChannelRead(final Object msg) {
+    invokeChannelRead(findContextInbound(), msg); // findContextInbound 找到下一个入站 handler
+    return this;
+}
+
+private AbstractChannelHandlerContext findContextInbound() {
+    AbstractChannelHandlerContext ctx = this;
+    do {
+        ctx = ctx.next;
+    } while (!ctx.inbound);
+    return ctx;
+}
+
+static void invokeChannelRead(final AbstractChannelHandlerContext next, Object msg) {
+    final Object m = next.pipeline.touch(ObjectUtil.checkNotNull(msg, "msg"), next); // touch 用于内存泄漏的抽样检测，如果没有设置检测就返回 msg
+    EventExecutor executor = next.executor();
+    if (executor.inEventLoop()) { // 如果当前线程是 eventLoop 线程，执行 invoke
+        next.invokeChannelRead(m);
+    } else {
+        executor.execute(new Runnable() { // 提交到线程池
+            @Override
+            public void run() {
+                next.invokeChannelRead(m);
+            }
+        });
+    }
+}
+
+private void invokeChannelRead(Object msg) {
+    if (invokeHandler()) { // 如果当前 context 绑定的 handler 已经可以使用了，调用 handler 的 channelRead 方法
+        try {
+            ((ChannelInboundHandler) handler()).channelRead(this, msg);
+        } catch (Throwable t) {
+            notifyHandlerException(t);
+        }
+    } else { // 如果 handler 状态还不是 ADD_COMPLETE，继续往下传递
+        fireChannelRead(msg);
+    }
+}
+```
+
+从源码中可以看到，事件只是在两个 `ChannelHandlerContext` 之间传递(从当前 context 到下一个 context)，如果想传递至整个 pipeline 中，需要开发者在自己的重写 `ChannelInboundHanlder` 的 `channel***` 方法中调用 `fire***` 方法让事件继续传递。
 
 ## DefaultChannelHandlerContext
 
