@@ -170,6 +170,64 @@ private void invokeChannelRead(Object msg) {
 
 从源码中可以看到，事件只是在两个 `ChannelHandlerContext` 之间传递(从当前 context 到下一个 context)，如果想传递至整个 pipeline 中，需要开发者在自己的重写 `ChannelInboundHanlder` 的 `channel***` 方法中调用 `fire***` 方法让事件继续传递。
 
+出站事件的传递过程与入站事件相同，只不过是传播方向是从链表尾部到头部，并且只传递给 `ChannelOutboundHandler`，以 `bind` 方法为例：
+
+```java
+@Override
+public ChannelFuture bind(SocketAddress localAddress) {
+    return bind(localAddress, newPromise());
+}
+
+@Override
+public ChannelFuture bind(final SocketAddress localAddress, final ChannelPromise promise) {
+    if (localAddress == null) {
+        throw new NullPointerException("localAddress");
+    }
+    if (!validatePromise(promise, false)) { // netty 中的 promise 模式
+        // cancelled
+        return promise;
+    }
+
+    final AbstractChannelHandlerContext next = findContextOutbound(); // 找到下一个 ChannelOutboundHandler 的 context
+    EventExecutor executor = next.executor();
+    if (executor.inEventLoop()) {
+        next.invokeBind(localAddress, promise);
+    } else {
+        // safeExecute 提交如果出现异常，会将异常信息传递给 promise
+        safeExecute(executor, new Runnable() {
+            @Override
+            public void run() {
+                next.invokeBind(localAddress, promise);
+            }
+        }, promise, null);
+    }
+    return promise;
+}
+
+// 往前驱方向查找到下一个 outbound handler
+private AbstractChannelHandlerContext findContextOutbound() {
+    AbstractChannelHandlerContext ctx = this;
+    do {
+        ctx = ctx.prev;
+    } while (!ctx.outbound);
+    return ctx;
+}
+
+private void invokeBind(SocketAddress localAddress, ChannelPromise promise) {
+    if (invokeHandler()) {
+        try {
+            ((ChannelOutboundHandler) handler()).bind(this, localAddress, promise);
+        } catch (Throwable t) {
+            notifyOutboundHandlerException(t, promise);
+        }
+    } else {
+        bind(localAddress, promise);
+    }
+}
+```
+
+传递逻辑与入站事件一致，只不过出站使用了 promise 模式，用于监听事件，这里先不关注，以后再关注。
+
 ## DefaultChannelHandlerContext
 
 `DefaultChannelHandlerContext` 是默认的 `ChannelHandlerContext` 实现，继承 `AbstractChannelHandlerContext` 抽象类，`ChannelHanlderContext` 的功能都已经在抽象类中实现了，`DefaultChannelHandlerContext` 只是传入了 `ChannelHandler`，并且判断 handler 的类型。
@@ -219,6 +277,8 @@ final class HeadContext extends AbstractChannelHandlerContext implements Channel
     }
 }
 ```
+
+`HeadContext` 实现了 `ChannelInboundHandler` 和 `ChannelOutboundHandler` 接口，`ChannelInboundHandler` 的方法实现大都是用 `ChannelHandlerContext` 的 `fire***` 方法将事件传递到 pipeline 中去，而 `ChannelOutboundHanlder` 中方法的实现都是利用 `Unsafe` 类中的方法处理数据。
 
 ## TailContext
 
@@ -280,3 +340,8 @@ protected void onUnhandledInboundMessage(Object msg) {
 }
 ```
 
+## 总结
+
+- 通过 `ChannelHandlerContext` 可以获取到对应的 pipeline 信息和 channel
+- `ChannelHandlerContext` 接口在 Netty 中有 1 个抽象类实现 `AbstractChannelHandlerContext`, 具体的实现类都继承了这个抽象类，其中 `DefaultChannelHandlerContext` 是默认的实现，`HeadContext` 和 `TailContext` 是 `DefaultChannelPipeline` 中特殊的两个 context。
+- `ChannelHandlerContext` 的 `fire***` 方法被调用后，会将事件传递给下一个 context，如果要继续往下传递，则需要开发者在 handler 中调用对应的 `fire***` 方法。
