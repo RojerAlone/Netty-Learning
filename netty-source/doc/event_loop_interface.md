@@ -117,3 +117,35 @@ public interface EventExecutorGroup extends ScheduledExecutorService, Iterable<E
 ```
 
 简而言之，`EventExecutorGroup` 接口继承了线程池接口中的方法，将任务提交返回的 Future 重写为自己的 Future，并且添加的优雅关闭线程池的方法。
+
+## EventLoopGroup 接口
+
+`EventLoopGroup` 也是线程池，管理着 `EventLoop`，来看源码。
+
+```java
+public interface EventLoopGroup extends EventExecutorGroup {
+    // 继承自 EventExecutorGroup
+    @Override
+    EventLoop next();
+
+    // 注册一个 Channel 到一个 EventLoop 上，注册完成后返回的 ChannelFuture 将会得到通知
+    ChannelFuture register(Channel channel);
+
+    // 使用 ChannelPromise 注册
+    ChannelFuture register(ChannelPromise promise);
+
+    // 已废弃，使用 register(ChannelPromise promise)
+    @Deprecated
+    ChannelFuture register(Channel channel, ChannelPromise promise);
+}
+```
+
+`EventLoopGroup` 的源码很简单，只添加了注册 `Channel` 的方法，由 `EventLoopGroup` 分配给 `Channel` 一个 `EventLoop`。
+
+## 总结
+
+通过前面的分析已经知道 `EventLoop`、`EventLoopGroup`、`EventExecutor` 和 `EventExecutorGroup` 都是线程池，只不过不同的接口有自己特有的方法，并且它们是有联系的。
+
+- `EventExecutor` 用来执行任务，它是由 `EventExecutorGroup` 来管理的，`EventLoopGroup` 也继承了 `EventExecutorGroup`，`EventLoop` 同时继承了 `EventLoopGroup` 和 `EventExecutor`。
+- `EventExecutor` 提供了获取 parent `EventExecutorGroup` 的方法，同时根据 Netty 的线程模型提供了 `inEventLoop` 方法判断是否当前线程应该执行方法。
+- `EventLoopGroup` 提供了 `Channel` 注册的方法，由 `EventLoopGroup` 给 `Channel` 分配一个 `EventLoop`。
