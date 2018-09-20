@@ -149,3 +149,4 @@ public interface EventLoopGroup extends EventExecutorGroup {
 - `EventExecutor` 用来执行任务，它是由 `EventExecutorGroup` 来管理的，`EventLoopGroup` 也继承了 `EventExecutorGroup`，`EventLoop` 同时继承了 `EventLoopGroup` 和 `EventExecutor`。
 - `EventExecutor` 提供了获取 parent `EventExecutorGroup` 的方法，同时根据 Netty 的线程模型提供了 `inEventLoop` 方法判断是否当前线程应该执行方法。
 - `EventLoopGroup` 提供了 `Channel` 注册的方法，由 `EventLoopGroup` 给 `Channel` 分配一个 `EventLoop`。
+- `EventExecutorGroup` 是 Netty 中线程池与 JDK 自带线程池的纽带和个性化定制。
