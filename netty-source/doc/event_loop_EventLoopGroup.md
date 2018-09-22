@@ -116,7 +116,94 @@ public class DefaultEventLoopGroup extends MultithreadEventLoopGroup {
 
 ## NioEventLoopGroup
 
+`NioEventLoopGroup` 是基于 Java NIO，使用 Selector 和 Channel 的 `EventLoopGroup` 实现。
+
+```java
+public class NioEventLoopGroup extends MultithreadEventLoopGroup {
+
+    public NioEventLoopGroup() {
+        this(0);
+    }
+
+    public NioEventLoopGroup(int nThreads) {
+        this(nThreads, (Executor) null);
+    }
+
+    public NioEventLoopGroup(int nThreads, ThreadFactory threadFactory) {
+        this(nThreads, threadFactory, SelectorProvider.provider());
+    }
+
+    public NioEventLoopGroup(int nThreads, Executor executor) {
+        this(nThreads, executor, SelectorProvider.provider());
+    }
+
+    public NioEventLoopGroup(
+            int nThreads, ThreadFactory threadFactory, final SelectorProvider selectorProvider) {
+        this(nThreads, threadFactory, selectorProvider, DefaultSelectStrategyFactory.INSTANCE);
+    }
+
+    // NIO 用到了 Selector，NioEventLoop 需要传入 SelectorProvider，这里传入的 Select 策略用来控制 Selector
+    public NioEventLoopGroup(int nThreads, ThreadFactory threadFactory,
+        final SelectorProvider selectorProvider, final SelectStrategyFactory selectStrategyFactory) {
+        super(nThreads, threadFactory, selectorProvider, selectStrategyFactory, RejectedExecutionHandlers.reject());
+    }
+
+    public NioEventLoopGroup(
+            int nThreads, Executor executor, final SelectorProvider selectorProvider) {
+        this(nThreads, executor, selectorProvider, DefaultSelectStrategyFactory.INSTANCE);
+    }
+
+    public NioEventLoopGroup(int nThreads, Executor executor, final SelectorProvider selectorProvider,
+                             final SelectStrategyFactory selectStrategyFactory) {
+        super(nThreads, executor, selectorProvider, selectStrategyFactory, RejectedExecutionHandlers.reject());
+    }
+
+    public NioEventLoopGroup(int nThreads, Executor executor, EventExecutorChooserFactory chooserFactory,
+                             final SelectorProvider selectorProvider,
+                             final SelectStrategyFactory selectStrategyFactory) {
+        super(nThreads, executor, chooserFactory, selectorProvider, selectStrategyFactory,
+                RejectedExecutionHandlers.reject());
+    }
+
+    public NioEventLoopGroup(int nThreads, Executor executor, EventExecutorChooserFactory chooserFactory,
+                             final SelectorProvider selectorProvider,
+                             final SelectStrategyFactory selectStrategyFactory,
+                             final RejectedExecutionHandler rejectedExecutionHandler) {
+        super(nThreads, executor, chooserFactory, selectorProvider, selectStrategyFactory, rejectedExecutionHandler);
+    }
+
+    // 设置 IO 线程和 非 IO 线程花费时间的比例
+    public void setIoRatio(int ioRatio) {
+        for (EventExecutor e: this) {
+            ((NioEventLoop) e).setIoRatio(ioRatio);
+        }
+    }
+
+    // 用新创建的 Selector 重置 EventLoop 的 selector，用来解决 Java NIO 框架中著名的 epoll CPU 占用 100% 的 bug
+    public void rebuildSelectors() {
+        for (EventExecutor e: this) {
+            ((NioEventLoop) e).rebuildSelector();
+        }
+    }
+
+    // NioEventLoopGroup 对应 NioEventLoop
+    @Override
+    protected EventLoop newChild(Executor executor, Object... args) throws Exception {
+        return new NioEventLoop(this, executor, (SelectorProvider) args[0],
+            ((SelectStrategyFactory) args[1]).newSelectStrategy(), (RejectedExecutionHandler) args[2]);
+    }
+}
+```
+
+`NioEventLoopGroup` 是为基于 Java NIO 的线程服务的，构造参数中传入了 `Selector` 相关的属性，创建 `NioEventLoop` 时传入这些参数，并且提供了设置 `NioEventLoop` 处理 IO Task 和非 IO Task 的时间比例，也提供了因为 NIO 框架出现的 epoll 导致 CPU 占用 100% 时的解决方案: `rebuildSelectors`，创建新的 `Selector`，具体实现后面再说。
+
 ## EpollEventLoopGroup
+
+`EpollEventLoopGroup` 是专门在 Linux 系统上工作的 `EventLoopGroup`，它的实现和 `NioEventLoopGroup` 大致相同。
+
+相同点在于构造方法结构相同，传入的参数在创建 `EventLoop` 时使用，但是不同的是，传入了一个 `maxEventsAtOnce` 参数限制了每个 `EpollEventLoop` 中等待处理的最大 epoll 事件数量，并且 `EpollEventLoopGroup` 没有设置 Java 自带 NIO 框架的 `Selector`，因为 `EpollEventLoop` 通过 JNI（Java Native Interface）调用自己实现的 Native 方法，直接调用 Linux Kernel 的 epoll 机制，相比于 Java NIO 更加高效，并且没有 Java NIO 中的 CPU 100% 的 bug。
+
+代码很简单，这里不再放出来。
 
 ## ThreadPerChannelEventLoopGroup
 
