@@ -213,3 +213,89 @@ public abstract class AbstractScheduledEventExecutor extends AbstractEventExecut
 继承的 `schedule` 方法都是将参数封装到自己的 `ScheduledFutureTask` 中，如果是自己应该执行的任务就提交到等待队列，不是自己的就执行 `execute` 方法让其他线程处理。
 
 ## SingleThreadEventExecutor
+
+`SingleThreadEventExecutor` 是单线程的线程池，它是个抽象类，继承了 `AbstarctScheduledEventExecutor`，实现了 `OrderedEventExecutor` 接口。
+
+### 类属性和初始化
+```java
+// 等待执行的任务上限，最小为 16，最大为 Integer.MAX_VALUE
+static final int DEFAULT_MAX_PENDING_EXECUTOR_TASKS = Math.max(16,
+          SystemPropertyUtil.getInt("io.netty.eventexecutor.maxPendingTasks", Integer.MAX_VALUE));
+
+// 线程池状态
+private static final int ST_NOT_STARTED = 1; // 还没有启动，存在延迟启动的机制，直到有任务提交以后才会开始执行任务
+private static final int ST_STARTED = 2;
+private static final int ST_SHUTTING_DOWN = 3; // 正在关闭
+private static final int ST_SHUTDOWN = 4;
+private static final int ST_TERMINATED = 5;
+
+// 
+private static final Runnable WAKEUP_TASK = new Runnable() {
+    @Override
+    public void run() {
+        // Do nothing.
+    }
+};
+private static final Runnable NOOP_TASK = new Runnable() {
+    @Override
+    public void run() {
+        // Do nothing.
+    }
+};
+
+private static final AtomicIntegerFieldUpdater<SingleThreadEventExecutor> STATE_UPDATER;
+private static final AtomicReferenceFieldUpdater<SingleThreadEventExecutor, ThreadProperties> PROPERTIES_UPDATER;
+// 初始化 UPDATER
+static {
+    AtomicIntegerFieldUpdater<SingleThreadEventExecutor> updater =
+            PlatformDependent.newAtomicIntegerFieldUpdater(SingleThreadEventExecutor.class, "state");
+    if (updater == null) {
+        updater = AtomicIntegerFieldUpdater.newUpdater(SingleThreadEventExecutor.class, "state");
+    }
+    STATE_UPDATER = updater;
+
+    AtomicReferenceFieldUpdater<SingleThreadEventExecutor, ThreadProperties> propertiesUpdater =
+            PlatformDependent.newAtomicReferenceFieldUpdater(SingleThreadEventExecutor.class, "threadProperties");
+    if (propertiesUpdater == null) {
+        propertiesUpdater = AtomicReferenceFieldUpdater.newUpdater(SingleThreadEventExecutor.class,
+                                                               ThreadProperties.class, "threadProperties");
+    }
+    PROPERTIES_UPDATER = propertiesUpdater;
+}
+// 等待队列
+private final Queue<Runnable> taskQueue;
+// 执行任务的线程
+private volatile Thread thread;
+@SuppressWarnings("unused")
+private volatile ThreadProperties threadProperties;
+private final Executor executor;
+private volatile boolean interrupted;
+
+private final Semaphore threadLock = new Semaphore(0);
+private final Set<Runnable> shutdownHooks = new LinkedHashSet<Runnable>();
+private final boolean addTaskWakesUp;
+private final int maxPendingTasks;
+private final RejectedExecutionHandler rejectedExecutionHandler;
+
+private long lastExecutionTime;
+
+@SuppressWarnings({ "FieldMayBeFinal", "unused" })
+private volatile int state = ST_NOT_STARTED;
+
+private volatile long gracefulShutdownQuietPeriod;
+private volatile long gracefulShutdownTimeout;
+private long gracefulShutdownStartTime;
+
+protected SingleThreadEventExecutor(EventExecutorGroup parent, Executor executor,
+                                    boolean addTaskWakesUp, int maxPendingTasks,
+                                    RejectedExecutionHandler rejectedHandler) {
+    super(parent);
+    this.addTaskWakesUp = addTaskWakesUp; // 是否在 addTask 时唤醒执行线程
+    this.maxPendingTasks = Math.max(16, maxPendingTasks);
+    this.executor = ObjectUtil.checkNotNull(executor, "executor");
+    taskQueue = newTaskQueue(this.maxPendingTasks);
+    rejectedExecutionHandler = ObjectUtil.checkNotNull(rejectedHandler, "rejectedHandler");
+}
+```
+
+### 核心方法
