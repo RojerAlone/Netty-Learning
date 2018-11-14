@@ -405,3 +405,33 @@ private void doStartThread() {
     });
 }
 ```
+
+## DefaultEventExecutor
+
+`DefaultEventExecutor` 继承了 `SingleThreadEventExecutor`，除了构造方法外就是重写 `run()` 方法，因为是单线程的线程池，所以在 `run()` 方法中的操作就是从等待队列中取出任务并执行。
+
+```java
+public final class DefaultEventExecutor extends SingleThreadEventExecutor {
+
+    public DefaultEventExecutor(EventExecutorGroup parent, Executor executor, int maxPendingTasks,
+                                RejectedExecutionHandler rejectedExecutionHandler) {
+        super(parent, executor, true, maxPendingTasks, rejectedExecutionHandler);
+    }
+
+    // 
+    @Override
+    protected void run() {
+        for (;;) {
+            Runnable task = takeTask();
+            if (task != null) {
+                task.run();
+                updateLastExecutionTime();
+            }
+
+            if (confirmShutdown()) { // 如果线程池被关闭了，退出
+                break;
+            }
+        }
+    }
+}
+```
