@@ -273,7 +273,7 @@ private volatile boolean interrupted;
 
 private final Semaphore threadLock = new Semaphore(0);
 private final Set<Runnable> shutdownHooks = new LinkedHashSet<Runnable>();
-private final boolean addTaskWakesUp;
+private final boolean addTaskWakesUp; // 添加任务时是否唤醒线程池
 private final int maxPendingTasks;
 private final RejectedExecutionHandler rejectedExecutionHandler;
 
@@ -298,4 +298,110 @@ protected SingleThreadEventExecutor(EventExecutorGroup parent, Executor executor
 }
 ```
 
-### 核心方法
+### 任务提交
+
+线程池的任务提交方法当然为 `execute` 了，来看下这个方法：
+
+```java
+@Override
+public void execute(Runnable task) {
+    if (task == null) {
+        throw new NullPointerException("task");
+    }
+
+    boolean inEventLoop = inEventLoop(); // 提交线程是否属于当前线程池
+    if (inEventLoop) { // 线程池已启动，提交到等待队列
+        addTask(task);
+    } else { // 线程池未启动，先启动线程池（创建启动线程并启动），再提交任务到等待队列
+        startThread(); // 启动线程池
+        addTask(task);
+        if (isShutdown() && removeTask(task)) { // 如果线程池已经关闭，删除任务
+            reject();
+        }
+    }
+
+    if (!addTaskWakesUp && wakesUpForTask(task)) { // 如果需要唤醒线程池，添加一个 WAKE_UP_TASK 到队列中
+        wakeup(inEventLoop);
+    }
+}
+
+@Override
+public boolean inEventLoop(Thread thread) {
+    return thread == this.thread; // 判断传入的线程是否和类变量是同一个线程
+}
+```
+
+从源码中我们可以看出，提交任务的时候会进行唤醒线程池的操作。
+
+### 唤醒线程池
+
+```java
+private void startThread() {
+    if (STATE_UPDATER.get(this) == ST_NOT_STARTED) { // 启动前先检测状态
+        if (STATE_UPDATER.compareAndSet(this, ST_NOT_STARTED, ST_STARTED)) { // 设置状态成功后启动
+            doStartThread();
+        }
+    }
+}
+
+private void doStartThread() {
+    assert thread == null;
+    // 直接交给 ExecutorGroup 传进来的 executor 去执行新的线程
+    executor.execute(new Runnable() {
+        @Override
+        public void run() {
+            thread = Thread.currentThread();
+            if (interrupted) {
+                thread.interrupt();
+            }
+
+            boolean success = false;
+            updateLastExecutionTime();
+            try {
+                SingleThreadEventExecutor.this.run(); // 子类的 run 方法执行起来
+                success = true;
+            } catch (Throwable t) {
+                logger.warn("Unexpected exception from an event executor: ", t);
+            } finally {
+                for (;;) {
+                    int oldState = STATE_UPDATER.get(SingleThreadEventExecutor.this);
+                    if (oldState >= ST_SHUTTING_DOWN || STATE_UPDATER.compareAndSet(
+                            SingleThreadEventExecutor.this, oldState, ST_SHUTTING_DOWN)) {
+                        break;
+                    }
+                }
+
+                // Check if confirmShutdown() was called at the end of the loop.
+                if (success && gracefulShutdownStartTime == 0) {
+                    logger.error("Buggy " + EventExecutor.class.getSimpleName() + " implementation; " +
+                            SingleThreadEventExecutor.class.getSimpleName() + ".confirmShutdown() must be called " +
+                            "before run() implementation terminates.");
+                }
+
+                try {
+                    // Run all remaining tasks and shutdown hooks.
+                    for (;;) {
+                        if (confirmShutdown()) {
+                            break;
+                        }
+                    }
+                } finally {
+                    try {
+                        cleanup();
+                    } finally {
+                        STATE_UPDATER.set(SingleThreadEventExecutor.this, ST_TERMINATED);
+                        threadLock.release();
+                        if (!taskQueue.isEmpty()) {
+                            logger.warn(
+                                    "An event executor terminated with " +
+                                            "non-empty task queue (" + taskQueue.size() + ')');
+                        }
+
+                        terminationFuture.setSuccess(null);
+                    }
+                }
+            }
+        }
+    });
+}
+```
